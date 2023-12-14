@@ -1,0 +1,67 @@
+import mongoose from "mongoose";
+import uniqueValidator from 'mongoose-unique-validator';
+
+const userSchema = mongoose.Schema({
+    username: {
+        type: String,
+        lowercase: true,
+        required: [true, 'Username is required'],
+        unique: true,
+        match: [/^[a-z0-9]+$/, 'Username can only contain letters and numbers'],
+        trim: true,
+        index: true,
+    },
+    email: {
+        type: String,
+        lowercase: true,
+        required: [true, 'Email is required'],
+        unique: true,
+        validate(value) {
+            if (!this.email && this.provider !== 'local') return;
+            return /^\S+@\S+\.\S+$/.test(value);
+        },
+    },
+    password: {
+        type: String,
+        required: [requirePassword, 'Only providers can be without a password'],
+        validate(value) {
+            const strLength = value && value.length;
+            const hasNumber = /\d/.test(value);
+            const hasLowerCase = /[a-z]/.test(value);
+            return strLength > 8 && hasNumber && hasLowerCase;
+        },
+        private: true
+    },
+    isAdmin: {
+        type: Boolean,
+        default: false,  //if no value provided it will be set to false by default
+    }
+}, { timestamps: true })
+userSchema.plugin(uniqueValidator, { message: 'is already taken.' });
+function requirePassword() {
+    return !this.provider || (this.password && this.password.length > 0);
+}
+// This method is used for checking if the password needs to be hashed or not
+// It's called automatically before saving any document with password field in it
+userSchema.pre('save', function save(next) {
+    const user = this;
+    if (!user.isModified('password')) return next();
+    bcrypt.genSalt(10, (err, salt) => {
+        if (err) return next(err);
+        bcrypt.hash(user.password, salt, null, (err, hash) => {
+            if (err) return next(err);
+            // Save the hashed version of our password that we can use elsewhere.
+            User.prototype.password = hash;
+            // On error, just go on, because this isn't a critical operation.
+            // Next is used to call another middleware or the controller.
+            console.log("User Password Hashed");
+            next(null, hash);
+            user.password = hash;
+            next();
+        });
+    });
+});
+
+const User = mongoose.model('User', userSchema)
+
+export default User
